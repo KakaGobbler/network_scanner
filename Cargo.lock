@@ -394,6 +394,7 @@ name = "network_scanner"
 version = "0.1.0"
 dependencies = [
  "futures",
+ "once_cell",
  "tokio",
  "tokio-net",
 ]

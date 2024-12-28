@@ -5,5 +5,5 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-ping = "0.6.1"
+ping = "0.5.2"
 futures = "0.3"

@@ -1,49 +1,42 @@
-use std::net::{Ipv4Addr, SocketAddr};
-use std::time::Duration;
-use ping::{Ping, PingResult};
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
-
-async fn scan_ip(ip: Ipv4Addr) -> Option<Ipv4Addr> {
-    let ping = Ping::new();
-    match ping.ping(ip.to_string().as_str(), 1) {
-        Ok(PingResult::Success { .. }) => {
-            println!("Host {} is online!", ip);
-            Some(ip)
-        }
-        _ => {
-            println!("Host {} is offline!", ip);
-            None
-        }
-    }
-}
-
-async fn scan_range(start_ip: Ipv4Addr, end_ip: Ipv4Addr) {
-    let mut futures = FuturesUnordered::new();
-    
-    let start_octets = start_ip.octets();
-    let end_octets = end_ip.octets();
-    
-    // Loop through the range of IPs
-    for i in start_octets[3]..=end_octets[3] {
-        let current_ip = Ipv4Addr::new(start_octets[0], start_octets[1], start_octets[2], i);
-        futures.push(scan_ip(current_ip));
-    }
-
-    // Wait for all futures to complete
-    while let Some(ip) = futures.next().await {
-        if let Some(ip) = ip {
-            println!("Active IP: {}", ip);
-        }
-    }
-}
+use tokio::net::TcpStream;
+use tokio::time::{timeout, Duration};
+use std::net::SocketAddr;
+use futures::future::join_all;
 
 #[tokio::main]
 async fn main() {
-    // Example input
-    let start_ip = Ipv4Addr::new(192, 168, 1, 1);
-    let end_ip = Ipv4Addr::new(192, 168, 1, 255);
+    let ip_range = "192.168.1."; // You can adjust this for your own network
+    let start_port = 20;
+    let end_port = 1024; // Define the range of ports you want to scan
 
-    // Scan the range
-    scan_range(start_ip, end_ip).await;
+    // Scan all addresses in the range
+    let tasks: Vec<_> = (start_port..=end_port).map(|port| {
+        let ip = format!("{}{}", ip_range, "1"); // Replace "1" with other IPs in range if necessary
+        let addr = format!("{}:{}", ip, port);
+        let socket_addr: SocketAddr = addr.parse().unwrap();
+
+        tokio::spawn(async move {
+            scan_port(socket_addr).await
+        })
+    }).collect();
+
+    // Wait for all tasks to finish
+    let _results = join_all(tasks).await;
+}
+
+// Function to scan individual port
+async fn scan_port(addr: SocketAddr) {
+    let result = timeout(Duration::from_secs(1), TcpStream::connect(&addr)).await;
+
+    match result {
+        Ok(Ok(_stream)) => {
+            println!("Port {} is open", addr.port());
+        }
+        Ok(Err(_)) => {
+            // Port is closed, no output or could print if desired
+        }
+        Err(_) => {
+            // Timeout, port may be closed or not responding
+        }
+    }
 }
